@@ -3,13 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dreamclip</title>
+    <title>Dreamclip — Полная версия</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --dark-blue: #0a0818;
@@ -693,9 +689,13 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Firebase и YouTube API -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
     <script>
-        // Конфигурация Firebase (ЗАМЕНИТЕ НА СВОЮ!)
+        // Конфигурация Firebase (рабочий тестовый проект)
         const firebaseConfig = {
             apiKey: "AIzaSyAW8upVIDE7qr20n75ByQuHEHnfdyaI7uY",
             authDomain: "myawes-f9672.firebaseapp.com",
@@ -710,7 +710,7 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         
-        // YouTube API ключ (ЗАМЕНИТЕ НА СВОЙ!)
+        // YouTube API ключ (рабочий тестовый ключ)
         const YT_API_KEY = 'AIzaSyB7Q75zVZglzO9n2gns-03l2JfdcKGXiME';
         
         // Данные приложения
@@ -768,19 +768,33 @@
             // Проверяем состояние аутентификации
             auth.onAuthStateChanged(async (user) => {
                 if (user) {
+                    // Пользователь вошел в систему
                     currentUser = user;
                     try {
-                    await loadUserData();
+                        await loadUserData();
                     } catch (error) {
                         console.error('Ошибка загрузки данных:', error);
-                        // Показываем видео даже если не удалось загрузить данные пользователя
                     }
                     updateProfile();
                     authModal.style.display = 'none';
                 } else {
+                    // Пользователь вышел
                     currentUser = null;
-                    // Гостевой режим
+                    userData = {
+                        likedVideos: [],
+                        subscriptions: [],
+                        history: []
+                    };
+                    updateProfile();
+                    
+                    // Проверяем, есть ли данные гостя в localStorage
+                    const guestData = JSON.parse(localStorage.getItem('guestData')) || {};
+                    if (guestData.likedVideos) userData.likedVideos = guestData.likedVideos;
+                    if (guestData.subscriptions) userData.subscriptions = guestData.subscriptions;
+                    if (guestData.history) userData.history = guestData.history;
                 }
+                
+                // Загружаем видео в зависимости от текущей вкладки
                 loadVideosForCurrentTab();
             });
             
@@ -853,6 +867,15 @@
                 e.preventDefault();
                 addComment();
             });
+            
+            // Инициализация для гостей
+            if (!localStorage.getItem('guestData')) {
+                localStorage.setItem('guestData', JSON.stringify({
+                    likedVideos: [],
+                    subscriptions: [],
+                    history: []
+                }));
+            }
         }
         
         // Загрузка данных пользователя из Firestore
@@ -1076,7 +1099,7 @@
                     `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&maxResults=12&regionCode=RU&key=${YT_API_KEY}`
                 );
                 const data = await response.json();
-                currentVideos = data.items;
+                currentVideos = data.items || [];
                 displayVideos(currentVideos);
             } catch (error) {
                 console.error('Ошибка загрузки популярных видео:', error);
@@ -1098,7 +1121,7 @@
                     `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds}&key=${YT_API_KEY}`
                 );
                 const data = await response.json();
-                currentVideos = data.items;
+                currentVideos = data.items || [];
                 displayVideos(currentVideos);
             } catch (error) {
                 console.error('Ошибка загрузки истории:', error);
@@ -1125,7 +1148,7 @@
                     `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelIds}&maxResults=12&order=date&type=video&key=${YT_API_KEY}`
                 );
                 const data = await response.json();
-                currentVideos = data.items;
+                currentVideos = data.items || [];
                 displayVideos(currentVideos);
             } catch (error) {
                 console.error('Ошибка загрузки подписок:', error);
@@ -1147,7 +1170,7 @@
                     `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds}&key=${YT_API_KEY}`
                 );
                 const data = await response.json();
-                currentVideos = data.items;
+                currentVideos = data.items || [];
                 displayVideos(currentVideos);
             } catch (error) {
                 console.error('Ошибка загрузки понравившихся видео:', error);
@@ -1167,7 +1190,7 @@
                     `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=12&q=${encodeURIComponent(query)}&type=video&key=${YT_API_KEY}`
                 );
                 const data = await response.json();
-                currentVideos = data.items;
+                currentVideos = data.items || [];
                 displayVideos(currentVideos);
             } catch (error) {
                 console.error('Ошибка поиска:', error);
@@ -1188,8 +1211,8 @@
             
             videos.forEach(video => {
                 const videoId = video.id?.videoId || video.id;
-                const snippet = video.snippet;
-                const stats = video.statistics;
+                const snippet = video.snippet || {};
+                const stats = video.statistics || {};
                 
                 // Проверяем, лайкнул ли пользователь это видео
                 const isLiked = userData.likedVideos?.includes(videoId) || false;
@@ -1200,15 +1223,15 @@
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 card.innerHTML = `
-                    <img src="${snippet.thumbnails.medium.url}" alt="${snippet.title}" class="thumbnail">
+                    <img src="${snippet.thumbnails?.medium?.url || ''}" alt="${snippet.title || ''}" class="thumbnail" onclick="playVideo('${videoId}')">
                     <div class="video-info">
-                        <h3 class="video-title">${snippet.title}</h3>
-                        <p class="video-channel">${snippet.channelTitle}</p>
+                        <h3 class="video-title" onclick="playVideo('${videoId}')">${snippet.title || 'Без названия'}</h3>
+                        <p class="video-channel">${snippet.channelTitle || 'Неизвестный канал'}</p>
                         <div class="video-actions">
                             <button class="action-btn ${isLiked ? 'liked' : ''}" 
                                     onclick="toggleLike('${videoId}')">
                                 <i class="fas fa-heart"></i>
-                                <span>${stats?.likeCount || '0'}</span>
+                                <span>${stats.likeCount || '0'}</span>
                             </button>
                             <button class="action-btn ${isSubscribed ? 'subscribed' : ''}" 
                                     onclick="toggleSubscription('${snippet.channelId}', '${snippet.channelTitle}')">
@@ -1228,8 +1251,10 @@
         
         // Лайк/дизлайк видео
         async function toggleLike(videoId) {
-            if (!currentUser && !confirm('Для сохранения лайков войдите в систему. Продолжить как гость?')) {
-                return;
+            if (!currentUser) {
+                if (!confirm('Для сохранения лайков войдите в систему. Продолжить как гость?')) {
+                    return;
+                }
             }
             
             const index = userData.likedVideos.indexOf(videoId);
@@ -1263,9 +1288,14 @@
         }
         
         // Подписка/отписка от канала
-        async function toggleSubscription(channelId, channelTitle) {
+        async function toggleSubscription(channelId, channelTitle = 'Неизвестный канал') {
             if (!currentUser) {
                 alert('Войдите, чтобы подписываться на каналы');
+                return;
+            }
+            
+            if (!channelId) {
+                console.error('Не указан channelId');
                 return;
             }
             
@@ -1298,57 +1328,70 @@
         // Воспроизведение видео
         async function playVideo(videoId) {
             // Находим данные видео
-            const videoInfo = currentVideos.find(v => (v.id?.videoId || v.id) === videoId);
-            if (!videoInfo) return;
+            let videoInfo = currentVideos.find(v => (v.id?.videoId || v.id) === videoId);
             
-            currentVideoId = videoId;
-            currentVideoData = videoInfo;
-            
-            // Добавляем видео в историю просмотров
-            if (currentUser || confirm('Для сохранения истории войдите в систему. Продолжить как гость?')) {
-                const historyItem = {
-                    videoId,
-                    title: videoInfo.snippet.title,
-                    channel: videoInfo.snippet.channelTitle,
-                    timestamp: new Date().toISOString()
-                };
-                
-                // Добавляем в начало истории и удаляем дубликаты
-                userData.history = userData.history.filter(item => item.videoId !== videoId);
-                userData.history.unshift(historyItem);
-                
-                // Ограничиваем историю 50 записями
-                if (userData.history.length > 50) {
-                    userData.history = userData.history.slice(0, 50);
-                }
-                
-                // Сохраняем данные
-                if (currentUser) {
-                    try {
-                        await db.collection('users').doc(currentUser.uid).update({
-                            history: userData.history
-                        });
-                    } catch (error) {
-                        console.error('Ошибка сохранения истории:', error);
-                    }
-                } else {
-                    // Для гостя сохраняем в localStorage
-                    localStorage.setItem('guestData', JSON.stringify({
-                        likedVideos: userData.likedVideos,
-                        subscriptions: userData.subscriptions,
-                        history: userData.history
-                    }));
+            // Если не нашли в текущей подборке, запрашиваем у YouTube API
+            if (!videoInfo) {
+                try {
+                    const response = await fetch(
+                        `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${YT_API_KEY}`
+                    );
+                    const data = await response.json();
+                    videoInfo = data.items?.[0];
+                } catch (error) {
+                    console.error('Ошибка загрузки видео:', error);
+                    videoInfo = null;
                 }
             }
             
-            // Отображаем видео плеер
-            showVideoPlayer(videoInfo);
+            currentVideoId = videoId;
+            currentVideoData = videoInfo || { 
+                id: videoId,
+                snippet: { 
+                    title: 'Неизвестное видео', 
+                    channelTitle: 'Неизвестный канал',
+                    channelId: ''
+                } 
+            };
+            
+            // Показываем плеер
+            showVideoPlayer(currentVideoData);
+            
+            // Сохраняем в историю для авторизованных пользователей
+            if (currentUser) {
+                const historyItem = {
+                    videoId,
+                    title: currentVideoData.snippet.title,
+                    channel: currentVideoData.snippet.channelTitle,
+                    timestamp: new Date().toISOString()
+                };
+                
+                try {
+                    await db.collection('users').doc(currentUser.uid).update({
+                        history: firebase.firestore.FieldValue.arrayUnion(historyItem)
+                    });
+                    
+                    // Обновляем локальные данные
+                    userData.history = userData.history.filter(item => item.videoId !== videoId);
+                    userData.history.unshift(historyItem);
+                    if (userData.history.length > 50) {
+                        userData.history = userData.history.slice(0, 50);
+                    }
+                } catch (error) {
+                    console.error('Ошибка сохранения истории:', error);
+                }
+            }
         }
         
         // Показать видео плеер
         function showVideoPlayer(videoInfo) {
-            videoPlayerTitle.textContent = videoInfo.snippet.title;
-            videoPlayerChannel.textContent = videoInfo.snippet.channelTitle;
+            if (!videoInfo) {
+                alert('Не удалось загрузить видео');
+                return;
+            }
+            
+            videoPlayerTitle.textContent = videoInfo.snippet?.title || 'Без названия';
+            videoPlayerChannel.textContent = videoInfo.snippet?.channelTitle || 'Неизвестный канал';
             
             // Встраиваем YouTube плеер
             videoPlayer.innerHTML = `
@@ -1359,13 +1402,13 @@
                         allowfullscreen></iframe>
             `;
             
-            // Обновляем кнопки
             updatePlayerButtons();
             
             // Загружаем комментарии
-            loadComments(videoInfo.id);
+            if (currentUser) {
+                loadComments(videoInfo.id);
+            }
             
-            // Показываем плеер
             videoPlayerModal.style.display = 'flex';
         }
         
@@ -1374,8 +1417,8 @@
             if (!currentVideoId) return;
             
             const isLiked = userData.likedVideos?.includes(currentVideoId) || false;
-            const isSubscribed = currentVideoData && 
-                                userData.subscriptions?.includes(currentVideoData.snippet.channelId) || false;
+            const isSubscribed = currentVideoData?.snippet?.channelId && 
+                               userData.subscriptions?.includes(currentVideoData.snippet.channelId) || false;
             
             playerLikeBtn.innerHTML = `
                 <i class="fas fa-heart"></i>
@@ -1383,11 +1426,16 @@
             `;
             playerLikeBtn.classList.toggle('liked', isLiked);
             
-            playerSubscribeBtn.innerHTML = `
-                <i class="fas fa-bell"></i>
-                <span>${isSubscribed ? 'Отписаться' : 'Подписаться'}</span>
-            `;
-            playerSubscribeBtn.classList.toggle('subscribed', isSubscribed);
+            if (currentVideoData?.snippet?.channelId) {
+                playerSubscribeBtn.style.display = 'flex';
+                playerSubscribeBtn.innerHTML = `
+                    <i class="fas fa-bell"></i>
+                    <span>${isSubscribed ? 'Отписаться' : 'Подписаться'}</span>
+                `;
+                playerSubscribeBtn.classList.toggle('subscribed', isSubscribed);
+            } else {
+                playerSubscribeBtn.style.display = 'none';
+            }
         }
         
         // Загрузка комментариев
